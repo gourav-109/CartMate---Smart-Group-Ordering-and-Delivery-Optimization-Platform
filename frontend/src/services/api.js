@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'https://cartmate-smart-group-ordering-and.onrender.com').replace(/\/$/, '');
+
 const API = axios.create({
-  baseURL: '/api'
+  baseURL: `${BACKEND_URL}/api`
 });
 
 API.interceptors.request.use((config) => {

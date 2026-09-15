@@ -21,7 +21,7 @@ export const Login = () => {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Cannot connect to backend server. Make sure the backend is running on http://localhost:5000');
+      setError(err.response?.data?.message || 'Cannot connect to backend server. Make sure the backend service is running.');
     } finally {
       setLoading(false);
     }
@@ -34,7 +34,7 @@ export const Login = () => {
       await login(presetEmail, 'password123');
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please ensure backend server is started on http://localhost:5000');
+      setError(err.response?.data?.message || 'Login failed. Please ensure the backend service is running.');
     } finally {
       setLoading(false);
     }

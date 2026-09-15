@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-const URL = window.location.origin.replace('5173', '5000');
+const URL = (import.meta.env.VITE_BACKEND_URL || 'https://cartmate-smart-group-ordering-and.onrender.com').replace(/\/$/, '');
 
 export const socket = io(URL, {
   autoConnect: false
