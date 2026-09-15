@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import API from '../services/api';
+import { MapPicker } from '../components/MapPicker';
 import { ShoppingBag, Plus, Trash2, Clock, MapPin, AlertCircle, ArrowLeft } from 'lucide-react';
 
 export const NewRequest = () => {
@@ -12,17 +13,19 @@ export const NewRequest = () => {
   const [totalMrp, setTotalMrp] = useState('93');
   const [standaloneTotal, setStandaloneTotal] = useState('128');
   const [combinedOrderTotal, setCombinedOrderTotal] = useState('221');
-  const [localityName, setLocalityName] = useState(user?.localityName || 'Koramangala 4th Block, Bengaluru');
+  const [localityName, setLocalityName] = useState(user?.localityName || 'Hostel 1, NIT Jamshedpur');
+  const [lat, setLat] = useState(user?.location?.coordinates?.[1] || 22.7780);
+  const [lng, setLng] = useState(user?.location?.coordinates?.[0] || 86.1438);
 
   // Set default deadline to 5 hours from now
   const defaultDeadline = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 16);
   const [deadline, setDeadline] = useState(defaultDeadline);
 
-  // Optional item list
+  // Item list
   const [items, setItems] = useState([
     { name: 'Amul Taaza Milk 500ml', mrp: 27 },
     { name: 'Britannia Whole Wheat Bread', mrp: 45 },
-    { name: 'Maggie 2-Min Noodles 4-Pack', mrp: 21 }
+    { name: 'Maggi 2-Min Noodles 4-Pack', mrp: 21 }
   ]);
 
   const [newItemName, setNewItemName] = useState('');
@@ -34,13 +37,28 @@ export const NewRequest = () => {
   const handleAddItem = (e) => {
     e.preventDefault();
     if (!newItemName || !newItemMrp) return;
-    setItems([...items, { name: newItemName, mrp: parseFloat(newItemMrp) }]);
+    const addedMrp = parseFloat(newItemMrp);
+    const updatedItems = [...items, { name: newItemName, mrp: addedMrp }];
+    setItems(updatedItems);
+    
+    // Automatically update totalMrp sum if appropriate
+    const newSum = updatedItems.reduce((s, i) => s + (i.mrp || 0), 0);
+    setTotalMrp(newSum.toString());
+    setStandaloneTotal((newSum + 35).toString());
+    setCombinedOrderTotal((newSum + 35 + 93).toString());
+
     setNewItemName('');
     setNewItemMrp('');
   };
 
   const handleRemoveItem = (index) => {
-    setItems(items.filter((_, i) => i !== index));
+    const updated = items.filter((_, i) => i !== index);
+    setItems(updated);
+    if (updated.length > 0) {
+      const newSum = updated.reduce((s, i) => s + (i.mrp || 0), 0);
+      setTotalMrp(newSum.toString());
+      setStandaloneTotal((newSum + 35).toString());
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -73,7 +91,9 @@ export const NewRequest = () => {
         combinedOrderTotal: parseFloat(combinedOrderTotal),
         localityName,
         deadline,
-        items
+        items,
+        lat,
+        lng
       });
 
       navigate(`/groups/${res.data.group._id}`);
@@ -85,17 +105,17 @@ export const NewRequest = () => {
   };
 
   return (
-    <div style={{ maxWidth: '640px', margin: '1.5rem auto', width: '100%' }}>
+    <div style={{ maxWidth: '680px', margin: '1.5rem auto', width: '100%' }}>
       <button onClick={() => navigate(-1)} className="btn-secondary" style={{ marginBottom: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
         <ArrowLeft size={16} /> Back to Feed
       </button>
 
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '2rem' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '0.4rem', color: 'var(--blinkit-yellow)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          🛒 Post New Blinkit Order Request
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '18px', padding: '2rem' }}>
+        <h2 style={{ fontSize: '1.55rem', fontWeight: '800', marginBottom: '0.4rem', color: 'var(--blinkit-yellow)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          🛒 Post New Blinkit Group Order
         </h2>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-          Share your Blinkit basket totals so nearby neighbors can combine orders and split handling fees!
+          Share your basket total so nearby NIT Jamshedpur hostel residents can combine carts and split delivery & small-cart fees!
         </p>
 
         {error && (
@@ -106,15 +126,15 @@ export const NewRequest = () => {
 
         <form onSubmit={handleSubmit}>
           {/* COMPULSORY FIELDS SECTION */}
-          <div style={{ background: '#0f172a', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
-            <h4 style={{ color: 'var(--blinkit-yellow)', marginBottom: '0.75rem', fontSize: '0.95rem' }}>
-              📌 Mandatory Post Details
+          <div style={{ background: 'var(--bg-dark)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+            <h4 style={{ color: 'var(--blinkit-yellow)', marginBottom: '0.85rem', fontSize: '0.95rem' }}>
+              📌 Mandatory Post Totals
             </h4>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div className="form-group">
                 <label>
-                  Total Products MRP (₹)<span className="required-star">*</span>
+                  Your Items Total MRP (₹)<span className="required-star">*</span>
                 </label>
                 <input
                   type="number"
@@ -127,7 +147,7 @@ export const NewRequest = () => {
 
               <div className="form-group">
                 <label>
-                  Standalone Fee Alone (₹)<span className="required-star">*</span>
+                  Standalone Total Alone (₹)<span className="required-star">*</span>
                 </label>
                 <input
                   type="number"
@@ -136,13 +156,13 @@ export const NewRequest = () => {
                   placeholder="e.g. 128"
                   required
                 />
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Blinkit total if ordered alone</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Price on Blinkit if ordered alone with fees</span>
               </div>
             </div>
 
             <div className="form-group" style={{ marginTop: '0.5rem' }}>
               <label>
-                Combined Order Total Price (Expected) in ₹<span className="required-star">*</span>
+                Combined Checkout Total Expected (₹)<span className="required-star">*</span>
               </label>
               <input
                 type="number"
@@ -151,25 +171,37 @@ export const NewRequest = () => {
                 placeholder="e.g. 221"
                 required
               />
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Combined order checkout total with shared single fee</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Estimated single checkout amount with shared fees</span>
             </div>
 
             <div className="form-group">
               <label>
-                Your Locality Name<span className="required-star">*</span>
+                Hostel / Locality Name<span className="required-star">*</span>
               </label>
               <input
                 type="text"
                 value={localityName}
                 onChange={(e) => setLocalityName(e.target.value)}
-                placeholder="e.g. Koramangala 4th Block, Bengaluru"
+                placeholder="e.g. Hostel 1, NIT Jamshedpur"
                 required
               />
             </div>
 
+            {/* Interactive Campus Map Location Picker */}
+            <MapPicker
+              initialLat={lat}
+              initialLng={lng}
+              initialLocality={localityName}
+              onLocationSelect={({ localityName: pickedName, lat: pickedLat, lng: pickedLng }) => {
+                setLocalityName(pickedName);
+                setLat(pickedLat);
+                setLng(pickedLng);
+              }}
+            />
+
             <div className="form-group">
               <label>
-                Order Deadline (Max 2 Days)<span className="required-star">*</span>
+                Order Deadline (Max 48 Hours)<span className="required-star">*</span>
               </label>
               <input
                 type="datetime-local"
@@ -177,23 +209,23 @@ export const NewRequest = () => {
                 onChange={(e) => setDeadline(e.target.value)}
                 required
               />
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Order will automatically close after this time</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Order automatically closes after this time</span>
             </div>
           </div>
 
-          {/* OPTIONAL ITEM LIST SECTION */}
-          <div style={{ background: '#0f172a', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+          {/* ITEM LIST SECTION */}
+          <div style={{ background: 'var(--bg-dark)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
             <h4 style={{ color: 'var(--text-main)', marginBottom: '0.4rem', fontSize: '0.95rem' }}>
-              🛍️ Itemized Basket Preview (Optional)
+              🛍️ Itemized Basket Preview
             </h4>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-              Optionally list products in your cart for transparency.
+              List products in your cart for full transparency with group members.
             </p>
 
             {items.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.85rem' }}>
                 {items.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', padding: '0.4rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}>
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', padding: '0.45rem 0.85rem', borderRadius: '7px', fontSize: '0.86rem' }}>
                     <span>{item.name}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <strong style={{ color: 'var(--blinkit-yellow)' }}>₹{item.mrp}</strong>
@@ -211,24 +243,24 @@ export const NewRequest = () => {
                 type="text"
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
-                placeholder="Item name (e.g. Milk)"
-                style={{ flex: 2, background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: '0.5rem', borderRadius: '6px', color: 'white', fontSize: '0.85rem' }}
+                placeholder="Product name (e.g. Milk, Maggi)"
+                style={{ flex: 2, background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: '0.5rem 0.75rem', borderRadius: '7px', color: 'white', fontSize: '0.85rem' }}
               />
               <input
                 type="number"
                 value={newItemMrp}
                 onChange={(e) => setNewItemMrp(e.target.value)}
                 placeholder="MRP (₹)"
-                style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: '0.5rem', borderRadius: '6px', color: 'white', fontSize: '0.85rem' }}
+                style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: '0.5rem 0.75rem', borderRadius: '7px', color: 'white', fontSize: '0.85rem' }}
               />
-              <button type="button" onClick={handleAddItem} className="btn-secondary" style={{ padding: '0.5rem 0.75rem' }}>
-                <Plus size={16} />
+              <button type="button" onClick={handleAddItem} className="btn-secondary" style={{ padding: '0.5rem 0.85rem' }}>
+                <Plus size={16} /> Add
               </button>
             </div>
           </div>
 
           <button type="submit" disabled={loading} className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '0.85rem', fontSize: '1rem' }}>
-            <ShoppingBag size={18} /> {loading ? 'Posting Request...' : 'Publish Blinkit Order Post'}
+            <ShoppingBag size={18} /> {loading ? 'Publishing Order...' : 'Publish Blinkit Order Post'}
           </button>
         </form>
       </div>

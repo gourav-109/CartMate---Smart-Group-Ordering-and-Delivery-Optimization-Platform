@@ -8,19 +8,83 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('cartmate_token') || null);
   const [loading, setLoading] = useState(true);
 
-  // Active floating Blinkit cart for live savings calculation on feed
-  const [activeCart, setActiveCart] = useState(() => {
-    const saved = localStorage.getItem('cartmate_active_cart');
-    return saved ? JSON.parse(saved) : { totalMrp: 123, standaloneTotal: 158, items: [{ name: 'Blinkit Sample Basket', mrp: 123 }] };
+  // Theme State ('dark-space' or 'light-cloud')
+  const [theme, setTheme] = useState(() => localStorage.getItem('cartmate_theme') || 'dark-space');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('cartmate_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark-space' ? 'light-cloud' : 'dark-space'));
+  };
+
+  // Multi-cart Active Sessions Management
+  const [savedCarts, setSavedCarts] = useState(() => {
+    const saved = localStorage.getItem('cartmate_saved_carts');
+    return saved
+      ? JSON.parse(saved)
+      : [
+          { id: 'cart-1', name: 'Evening Hostel Snacks', totalMrp: 123, standaloneTotal: 158 },
+          { id: 'cart-2', name: 'Late Night Munchies', totalMrp: 240, standaloneTotal: 275 },
+          { id: 'cart-3', name: 'Daily Milk & Grocery', totalMrp: 93, standaloneTotal: 128 }
+        ];
+  });
+
+  const [activeCartId, setActiveCartId] = useState(() => {
+    return localStorage.getItem('cartmate_active_cart_id') || 'cart-1';
   });
 
   useEffect(() => {
-    if (activeCart) {
-      localStorage.setItem('cartmate_active_cart', JSON.stringify(activeCart));
-    } else {
-      localStorage.removeItem('cartmate_active_cart');
+    localStorage.setItem('cartmate_saved_carts', JSON.stringify(savedCarts));
+  }, [savedCarts]);
+
+  useEffect(() => {
+    localStorage.setItem('cartmate_active_cart_id', activeCartId);
+  }, [activeCartId]);
+
+  const activeCart = savedCarts.find((c) => c.id === activeCartId) || savedCarts[0] || {
+    id: 'cart-default',
+    name: 'Default Cart',
+    totalMrp: 123,
+    standaloneTotal: 158
+  };
+
+  const addSavedCart = (newCart) => {
+    const cartObj = {
+      id: `cart-${Date.now()}`,
+      name: newCart.name || `Cart ${savedCarts.length + 1}`,
+      totalMrp: parseFloat(newCart.totalMrp) || 0,
+      standaloneTotal: parseFloat(newCart.standaloneTotal) || 0
+    };
+    setSavedCarts((prev) => [...prev, cartObj]);
+    setActiveCartId(cartObj.id);
+  };
+
+  const updateActiveCart = (updatedCartData) => {
+    setSavedCarts((prev) =>
+      prev.map((c) =>
+        c.id === activeCart.id
+          ? {
+              ...c,
+              totalMrp: parseFloat(updatedCartData.totalMrp),
+              standaloneTotal: parseFloat(updatedCartData.standaloneTotal),
+              name: updatedCartData.name || c.name
+            }
+          : c
+      )
+    );
+  };
+
+  const deleteSavedCart = (cartId) => {
+    if (savedCarts.length <= 1) return; // Keep at least one cart
+    const filtered = savedCarts.filter((c) => c.id !== cartId);
+    setSavedCarts(filtered);
+    if (activeCartId === cartId) {
+      setActiveCartId(filtered[0].id);
     }
-  }, [activeCart]);
+  };
 
   useEffect(() => {
     const fetchMe = async () => {
@@ -57,14 +121,14 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
+  const updateUserProfile = (updatedData) => {
+    setUser(updatedData);
+  };
+
   const logout = () => {
     localStorage.removeItem('cartmate_token');
     setToken(null);
     setUser(null);
-  };
-
-  const updateActiveCart = (cartData) => {
-    setActiveCart(cartData);
   };
 
   return (
@@ -76,8 +140,16 @@ export const AuthProvider = ({ children }) => {
         login,
         signup,
         logout,
+        updateUserProfile,
+        theme,
+        toggleTheme,
+        savedCarts,
         activeCart,
-        updateActiveCart
+        activeCartId,
+        setActiveCartId,
+        addSavedCart,
+        updateActiveCart,
+        deleteSavedCart
       }}
     >
       {children}

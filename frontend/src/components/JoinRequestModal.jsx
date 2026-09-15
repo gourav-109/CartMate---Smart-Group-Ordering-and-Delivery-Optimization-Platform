@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import API from '../services/api';
-import { Send, X, AlertCircle } from 'lucide-react';
+import { Send, X, AlertCircle, ShoppingBag } from 'lucide-react';
 
 export const JoinRequestModal = ({ isOpen, onClose, requestPost, onSuccess }) => {
   const { activeCart } = useContext(AuthContext);
@@ -34,7 +34,7 @@ export const JoinRequestModal = ({ isOpen, onClose, requestPost, onSuccess }) =>
         items: activeCart ? activeCart.items : []
       });
 
-      onSuccess();
+      if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send join request');
@@ -43,20 +43,33 @@ export const JoinRequestModal = ({ isOpen, onClose, requestPost, onSuccess }) =>
     }
   };
 
+  const posterName = requestPost.user?.name || 'Blinkit Shopper';
+  const posterLocality = requestPost.localityName || 'Hostel 1, NIT Jamshedpur';
+  const orderNumber = requestPost.orderNumber || `#CM-ORD-${requestPost._id.slice(-5).toUpperCase()}`;
+
   return (
     <div className="modal-overlay">
-      <div className="modal-content">
+      <div className="modal-content" style={{ maxWidth: '520px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3>Request to Join Blinkit Order</h3>
+          <h3 style={{ color: 'var(--blinkit-yellow)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <ShoppingBag size={18} /> Request to Join Blinkit Order
+          </h3>
           <button onClick={onClose} className="btn-secondary" style={{ padding: '0.3rem 0.6rem' }}>
             <X size={18} />
           </button>
         </div>
 
-        <div style={{ background: '#0f172a', padding: '0.85rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Posting User:</div>
-          <div style={{ fontWeight: '700', fontSize: '1rem' }}>{requestPost.user?.name || 'Blinkit Shopper'}</div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>📍 {requestPost.localityName}</div>
+        <div style={{ background: 'var(--bg-dark)', padding: '0.9rem', borderRadius: '12px', marginBottom: '1.25rem', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Host Post:</div>
+              <div style={{ fontWeight: '700', fontSize: '0.98rem' }}>{posterName}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>📍 {posterLocality}</div>
+            </div>
+            <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--blinkit-yellow)', background: 'rgba(248, 203, 70, 0.15)', padding: '0.2rem 0.55rem', borderRadius: '6px' }}>
+              {orderNumber}
+            </span>
+          </div>
         </div>
 
         {error && (
@@ -77,7 +90,7 @@ export const JoinRequestModal = ({ isOpen, onClose, requestPost, onSuccess }) =>
           </div>
 
           <div className="form-group">
-            <label>Your Standalone Total if Ordered Alone (₹)<span className="required-star">*</span></label>
+            <label>Your Total if Ordered Alone (₹)<span className="required-star">*</span></label>
             <input
               type="number"
               value={standaloneTotal}
@@ -87,12 +100,12 @@ export const JoinRequestModal = ({ isOpen, onClose, requestPost, onSuccess }) =>
           </div>
 
           <div className="form-group">
-            <label>Chat Request Note to Poster</label>
+            <label>Chat Note to Host</label>
             <textarea
               rows="2"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Suggest a meeting spot or ask questions..."
+              placeholder="Suggest a convenient campus meeting spot (e.g. Hostel 1 Gate) or ask questions..."
             />
           </div>
 
@@ -101,7 +114,7 @@ export const JoinRequestModal = ({ isOpen, onClose, requestPost, onSuccess }) =>
               Cancel
             </button>
             <button type="submit" disabled={loading} className="btn-primary">
-              <Send size={16} /> {loading ? 'Sending...' : 'Send Chat Request'}
+              <Send size={15} /> {loading ? 'Sending Request...' : 'Send Join Request'}
             </button>
           </div>
         </form>

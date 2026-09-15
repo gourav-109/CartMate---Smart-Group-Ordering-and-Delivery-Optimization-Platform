@@ -8,7 +8,9 @@ import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { Dashboard } from './pages/Dashboard';
 import { NewRequest } from './pages/NewRequest';
+import { EditRequest } from './pages/EditRequest';
 import { GroupDetail } from './pages/GroupDetail';
+import { Profile } from './pages/Profile';
 
 export const App = () => {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
@@ -39,10 +41,26 @@ export const App = () => {
                 }
               />
               <Route
+                path="/edit-request/:id"
+                element={
+                  <ProtectedRoute>
+                    <EditRequest />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/groups/:id"
                 element={
                   <ProtectedRoute>
                     <GroupDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
                   </ProtectedRoute>
                 }
               />

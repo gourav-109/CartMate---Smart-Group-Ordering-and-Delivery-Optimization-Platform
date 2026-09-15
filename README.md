@@ -1,43 +1,52 @@
-# 🛒 CartMate — Proximity Group Ordering MVP (SIH Hackathon)
+# 🛒 Cartmate — Proximity Group Ordering & Cost-Split Platform
 
-**CartMate** matches nearby users placing small quick-commerce orders (specifically **Blinkit**) so they can combine into a single checkout and split shared handling fees proportionally based on item contribution.
+**Cartmate** connects nearby hostel residents and neighbors (such as NIT Jamshedpur campus residents) placing quick-commerce orders (specifically **Blinkit**) so they can combine orders into a single checkout, eliminate small-cart surcharges, and split shared handling fees proportionally based on item contribution.
 
 ---
 
-## 🌟 Key Features
+## 🌟 Key Features & Capabilities
 
-1. **Blinkit Proportional Cost Split**:
+1. **Blinkit Proportional Cost Split Matrix**:
    $$\text{Member Share}_i = \frac{\text{Item MRP}_i}{\text{Total Combined MRP}}$$
-   $$\text{Final Payment}_i = \text{Member Share}_i \times \text{Combined Order Checkout Total}$$
-   $$\text{Net Savings}_i = \text{Standalone Individual Total}_i - \text{Final Payment}_i$$
-   - *Example*: User 1 (MRP ₹93, standalone ₹128) & User 2 (MRP ₹123, standalone ₹158) combined checkout ₹221 $\rightarrow$ User 1 pays **₹95.15** (saves **₹32.85**), User 2 pays **₹125.85** (saves **₹32.15**).
+   $$\text{Final Payment}_i = \text{Member Share}_i \times \text{Combined Order Total}$$
+   $$\text{Net Savings}_i = \text{Individual Standalone Total}_i - \text{Final Payment}_i$$
+   - Displays actual member names, verified user IDs (`#CM-84920`), trust scores, and settlement status.
 
-2. **Mandatory Post Fields**:
-   - Total MRP (`totalMrp`)
-   - Standalone Fee (`standaloneTotal`)
-   - Combined Total (`combinedOrderTotal`)
-   - Locality Name (`localityName`)
-   - Deadline (`deadline`, max 48 hours)
-   - Itemized list is optional.
+2. **Request to Join Order Flow**:
+   - Distinct, clearly visible **"Request to Join Order"** button on feed cards and group detail views.
+   - Non-members can submit their cart MRP, standalone fee, and a note to the host.
+   - Host reviews and accepts applicants in the join requests drawer.
 
-3. **Active Cart Session & Live Green Savings Preview**:
-   - Floating active cart bar allows users to input their current Blinkit basket.
-   - All nearby feed cards automatically calculate and display projected combined cost and **Net Green Fee Savings**.
+3. **NIT Jamshedpur Location Accuracy & Interactive Map Picker**:
+   - Accurately centered on **NIT Jamshedpur** (`86.1438, 22.7780`).
+   - Interactive Leaflet OpenStreetMap address picker with pin dropping and live browser GPS detection.
+   - Quick campus landmark chips: Hostel 1, Hostel 4 Canteen, Hostel 9, Computer Center, Outer Circle Gate, Adityapur Market.
 
-4. **Group Limit & Join Request Flow**:
-   - Maximum **4 participants** per order post.
-   - Join/Chat requests sent by users do **not** increase participant count until the postee explicitly reviews and accepts them.
+4. **Strict 5 km Discovery Radius Cap**:
+   - Nearby order discovery is strictly capped at a maximum of 5 km radius.
 
-5. **1-Hour Order Disappearance Rules**:
-   - *Deadline Expiry*: Auto-closes upon reaching deadline, stays on home feed for 1 hour post-closing, then hides.
-   - *Full Order / Completion*: Stays on home feed until marked `COMPLETED`. Hides 1 hour after completion.
-   - *Manual Closure*: Stays on home feed for 1 hour post-closure, then hides.
+5. **Order Deletion & History Archiving**:
+   - Immediate deletion from active feeds with full retention in the user's **Order History** tab.
+   - Preserves completed order numbers, participants, items, and cost breakdowns in user history.
 
-6. **Suggested Geographic Midpoint**:
-   - Automatically computes average latitude/longitude across members to suggest an ideal meeting spot.
+6. **Order Lifecycle & Manual Mark Completed**:
+   - Hosts can mark orders **Completed** or **Closed** at any member count (1 to 4 members).
+   - Unique Order Number (`#CM-ORD-...`) generated for every order post.
 
-7. **Real-time Group Chat (Socket.IO)**:
-   - Live room-based chat for participants to discuss meeting locations and payment confirmation.
+7. **Vibrant & Dark Mode Themes**:
+   - Dynamic theme switcher supporting Vibrant Neon palette and Sleek Dark theme with smooth animations.
+
+8. **Self-Profile & Verified Community Ratings**:
+   - Dedicated **"My Profile"** page to view and edit profile details, bio, and campus location.
+   - Profile stats: Completed orders count, verified trust rating (1-5 stars & reviews), unique randomly generated user ID.
+   - In-app rating modal to review and rate co-members after order completion.
+
+9. **Multi-Cart Session Switcher**:
+   - Users can maintain multiple saved cart profiles (e.g. "Evening Hostel Snacks", "Late Night Munchies") and switch active carts anytime.
+   - Feed cards dynamically compute green fee savings previews for the selected active cart.
+
+10. **Email Verification OTP**:
+    - 6-digit OTP verification flow during account registration.
 
 ---
 
@@ -47,10 +56,8 @@
 ```bash
 cd backend
 npm install
-npm run seed     # Populates mock users & Blinkit orders
-npm run dev      # Starts server on http://localhost:5000
+npm run dev      # Starts server on http://localhost:5000 (auto-connects MongoMemoryServer & seeds data)
 ```
-*Note: Backend automatically uses `mongodb-memory-server` if no `MONGODB_URI` is supplied in environment!*
 
 ### 2. Start Frontend App
 ```bash
@@ -61,14 +68,14 @@ npm run dev      # Starts Vite dev server on http://localhost:5173
 
 ---
 
-## 🔑 Demo Quick-Login Credentials
+## 🔑 Demo Quick-Login Credentials (NIT Jamshedpur)
 
-| User Name | Email | Password | Locality |
+| User Name | Email | Password | Locality / Landmark |
 | :--- | :--- | :--- | :--- |
-| **Aarav Sharma** (Poster) | `aarav@example.com` | `password123` | Koramangala 4th Block, Bengaluru |
-| **Priya Patel** | `priya@example.com` | `password123` | Koramangala 5th Block, Bengaluru |
-| **Rohan Verma** | `rohan@example.com` | `password123` | Koramangala 6th Block, Bengaluru |
-| **Ananya Gupta** | `ananya@example.com` | `password123` | HSR Layout Sector 1, Bengaluru |
+| **Aarav Sharma** (Host) | `aarav@example.com` | `password123` | Hostel 1, NIT Jamshedpur |
+| **Priya Patel** | `priya@example.com` | `password123` | Hostel 4 Canteen, NIT Jamshedpur |
+| **Rohan Verma** | `rohan@example.com` | `password123` | Outer Circle Gate, NIT Jamshedpur |
+| **Ananya Gupta** | `ananya@example.com` | `password123` | Adityapur Local Market, Jamshedpur |
 
 ---
 
@@ -76,16 +83,23 @@ npm run dev      # Starts Vite dev server on http://localhost:5173
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/auth/signup` | Register new user with locality & location |
+| `POST` | `/api/auth/send-otp` | Generate email OTP verification code |
+| `POST` | `/api/auth/signup` | Register new user with locality & coordinates |
 | `POST` | `/api/auth/login` | Authenticate user & get JWT token |
 | `GET` | `/api/auth/me` | Fetch current user profile |
-| `POST` | `/api/requests` | Post new Blinkit order request & initialize group |
-| `GET` | `/api/requests/nearby` | Fetch nearby orders sorted by proximity with 1-hr window filtering |
-| `POST` | `/api/requests/:id/join-request` | Send join/chat request to postee |
-| `GET` | `/api/requests/:id/join-requests` | Postee views pending join requests |
-| `PATCH` | `/api/requests/:id/respond-request` | Postee accepts/rejects applicant (updates count, max 4) |
+| `PATCH` | `/api/auth/profile` | Update profile name, locality, bio, coordinates |
+| `POST` | `/api/auth/users/:id/rate` | Submit 1-5 star rating and review comment |
+| `GET` | `/api/auth/users/:id` | Fetch public user profile and reviews |
+| `POST` | `/api/requests` | Post new Blinkit order request with unique orderNumber |
+| `GET` | `/api/requests/nearby` | Fetch nearby orders capped at 5 km radius |
+| `GET` | `/api/requests/my-requests` | Fetch user's active, history, and joined orders |
+| `PUT` | `/api/requests/:id` | Edit order details (items, deadline, MRP, locality) |
+| `DELETE` | `/api/requests/:id` | Delete post from active feed & archive to history |
+| `POST` | `/api/requests/:id/join-request` | Send join request to host |
+| `GET` | `/api/requests/:id/join-requests` | Host views pending join requests |
+| `PATCH` | `/api/requests/:id/respond-request` | Host accepts or rejects join request |
 | `PATCH` | `/api/requests/:id/status` | Mark request `CLOSED` or `COMPLETED` |
-| `GET` | `/api/groups/:id` | Fetch group details, members, split matrix & midpoint |
-| `POST` | `/api/groups/:id/finalize-cost` | Re-compute and persist proportional fee split |
-| `PATCH` | `/api/groups/:id/toggle-settled` | Toggle settled status per member |
+| `GET` | `/api/groups/:id` | Fetch group details, member names & split matrix |
+| `POST` | `/api/groups/:id/finalize-cost` | Finalize proportional cost split |
+| `PATCH` | `/api/groups/:id/toggle-settled` | Toggle settlement status per member |
 | `GET` | `/api/groups/:id/messages` | Fetch chat message history |

@@ -4,7 +4,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 let mongoMemoryServer = null;
 
 export const connectDB = async () => {
-  try {
+  try { 
     let mongoUri = process.env.MONGODB_URI;
 
     if (!mongoUri) {

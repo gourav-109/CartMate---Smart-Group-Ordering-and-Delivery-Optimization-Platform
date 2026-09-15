@@ -2,6 +2,10 @@ import mongoose from 'mongoose';
 
 const requestSchema = new mongoose.Schema(
   {
+    orderNumber: {
+      type: String,
+      unique: true
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -25,7 +29,8 @@ const requestSchema = new mongoose.Schema(
     },
     localityName: {
       type: String,
-      required: [true, 'Locality name is required']
+      required: [true, 'Locality name is required'],
+      default: 'Hostel 1, NIT Jamshedpur'
     },
     deadline: {
       type: Date,
@@ -42,7 +47,15 @@ const requestSchema = new mongoose.Schema(
       enum: ['OPEN', 'FULL', 'CLOSED', 'COMPLETED'],
       default: 'OPEN'
     },
+    isDeletedFromFeed: {
+      type: Boolean,
+      default: false
+    },
     closedAt: {
+      type: Date,
+      default: null
+    },
+    completedAt: {
       type: Date,
       default: null
     },
@@ -54,12 +67,22 @@ const requestSchema = new mongoose.Schema(
       },
       coordinates: {
         type: [Number], // [longitude, latitude]
-        required: true
+        default: [86.1438, 22.7780]
       }
     }
   },
   { timestamps: true }
 );
+
+// Pre-save hook to generate unique orderNumber if missing
+requestSchema.pre('save', function (next) {
+  if (!this.orderNumber) {
+    const timestampPart = Date.now().toString().slice(-4);
+    const randomPart = Math.floor(100 + Math.random() * 900);
+    this.orderNumber = `CM-ORD-${timestampPart}${randomPart}`;
+  }
+  next();
+});
 
 requestSchema.index({ location: '2dsphere' });
 

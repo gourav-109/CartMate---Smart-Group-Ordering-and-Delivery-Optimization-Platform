@@ -2,8 +2,9 @@ import express from 'express';
 import Request from '../models/Request.js';
 import Group from '../models/Group.js';
 import JoinRequest from '../models/JoinRequest.js';
+import User from '../models/User.js';
 import { protect } from '../middleware/auth.js';
-import { calculateHaversineDistance, calculateGeographicMidpoint, calculateProportionalSplit } from '../utils/geo.js';
+import { calculateHaversineDistance, calculateGeographicMidpoint, calculateGroupSplit } from '../utils/geo.js';
 
 const router = express.Router();
 
@@ -13,14 +14,12 @@ router.post('/', protect, async (req, res) => {
   try {
     const { totalMrp, standaloneTotal, combinedOrderTotal, localityName, deadline, items, lat, lng } = req.body;
 
-    // Validate mandatory fields
     if (!totalMrp || !standaloneTotal || !combinedOrderTotal || !localityName || !deadline) {
       return res.status(400).json({
         message: 'Mandatory fields missing: totalMrp, standaloneTotal, combinedOrderTotal, localityName, and deadline are required.'
       });
     }
 
-    // Validate deadline (max 48 hours = 2 days)
     const deadlineDate = new Date(deadline);
     const now = new Date();
     const maxDeadline = new Date(now.getTime() + 48 * 60 * 60 * 1000);
@@ -37,13 +36,17 @@ router.post('/', protect, async (req, res) => {
       return res.status(400).json({ message: 'Deadline cannot exceed 2 days (48 hours) from now' });
     }
 
-    // Coords: use provided or fallback to user's saved location
     const coords = [
-      lng !== undefined ? parseFloat(lng) : req.user.location.coordinates[0],
-      lat !== undefined ? parseFloat(lat) : req.user.location.coordinates[1]
+      lng !== undefined ? parseFloat(lng) : (req.user.location?.coordinates?.[0] || 86.1438),
+      lat !== undefined ? parseFloat(lat) : (req.user.location?.coordinates?.[1] || 22.7780)
     ];
 
+    const timestampPart = Date.now().toString().slice(-4);
+    const randomPart = Math.floor(100 + Math.random() * 900);
+    const orderNumber = `CM-ORD-${timestampPart}${randomPart}`;
+
     const orderRequest = await Request.create({
+      orderNumber,
       user: req.user._id,
       store: 'Blinkit',
       totalMrp: parseFloat(totalMrp),
@@ -52,27 +55,36 @@ router.post('/', protect, async (req, res) => {
       localityName,
       deadline: deadlineDate,
       items: Array.isArray(items) ? items : [],
+      status: 'OPEN',
+      isDeletedFromFeed: false,
       location: {
         type: 'Point',
         coordinates: coords
       }
     });
 
-    // Automatically create Group for this request with poster as 1st participant
+    const initialParticipant = {
+      user: req.user._id,
+      userName: req.user.name,
+      totalMrp: parseFloat(totalMrp),
+      itemMRP: parseFloat(totalMrp),
+      standaloneTotal: parseFloat(standaloneTotal),
+      standaloneTotalAlone: parseFloat(standaloneTotal),
+      items: Array.isArray(items) ? items : [],
+      shareRatio: 1.0,
+      finalPayment: parseFloat(combinedOrderTotal),
+      savings: Math.round((parseFloat(standaloneTotal) - parseFloat(combinedOrderTotal)) * 100) / 100,
+      settled: false,
+      paymentStatus: 'PENDING'
+    };
+
     const group = await Group.create({
       request: orderRequest._id,
       owner: req.user._id,
       combinedOrderTotal: parseFloat(combinedOrderTotal),
       status: 'PENDING',
-      participants: [
-        {
-          user: req.user._id,
-          totalMrp: parseFloat(totalMrp),
-          standaloneTotal: parseFloat(standaloneTotal),
-          items: Array.isArray(items) ? items : [],
-          settled: false
-        }
-      ],
+      isDeletedFromFeed: false,
+      participants: [initialParticipant],
       meetingPoint: {
         name: `${localityName} (Meeting Point TBD in chat)`,
         coordinates: coords
@@ -91,65 +103,66 @@ router.post('/', protect, async (req, res) => {
 });
 
 // @route   GET /api/requests/nearby
-// @desc    Get active nearby requests sorted by proximity, applying 1-hour expiry visibility rules
+// @desc    Get active nearby requests sorted by proximity, strictly capped at max 5km radius
 router.get('/nearby', protect, async (req, res) => {
   try {
-    const userLng = req.query.lng ? parseFloat(req.query.lng) : req.user.location.coordinates[0];
-    const userLat = req.query.lat ? parseFloat(req.query.lat) : req.user.location.coordinates[1];
-    const radiusKm = req.query.radius ? parseFloat(req.query.radius) : 15; // default 15 km
+    const userLng = req.query.lng !== undefined && req.query.lng !== ''
+      ? parseFloat(req.query.lng)
+      : (req.user.location?.coordinates?.[0] || 86.1438);
+    const userLat = req.query.lat !== undefined && req.query.lat !== ''
+      ? parseFloat(req.query.lat)
+      : (req.user.location?.coordinates?.[1] || 22.7780);
+
+    // STRICT CAP: Max radius 5 km
+    const requestedRadius = req.query.radius ? parseFloat(req.query.radius) : 5;
+    const radiusKm = Math.min(requestedRadius, 5.0);
 
     const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
-    // Fetch all requests
-    const allRequests = await Request.find()
-      .populate('user', 'name email localityName location')
+    const allRequests = await Request.find({
+      isDeletedFromFeed: { $ne: true },
+      status: { $in: ['OPEN', 'FULL'] }
+    })
+      .populate('user', 'name email customId completedOrdersCount localityName location averageRating ratings')
       .lean();
 
     const formattedRequests = [];
 
     for (const reqDoc of allRequests) {
-      let isExpired = false;
-
-      // Rule 1: Deadline passed
-      if (new Date(reqDoc.deadline) < now) {
-        isExpired = true;
-        if (reqDoc.status === 'OPEN') {
-          // Auto-mark closed and set closedAt if not already done
-          await Request.findByIdAndUpdate(reqDoc._id, { status: 'CLOSED', closedAt: reqDoc.closedAt || now });
-          reqDoc.status = 'CLOSED';
-          reqDoc.closedAt = reqDoc.closedAt || now;
-        }
-      }
-
-      // Check 1-hour disappearance rule for closed/completed/expired orders
-      if (reqDoc.closedAt && new Date(reqDoc.closedAt) < oneHourAgo) {
-        // Disappear from home feed after 1 hour of closure
+      if (new Date(reqDoc.deadline) < now && reqDoc.status === 'OPEN') {
+        await Request.findByIdAndUpdate(reqDoc._id, { status: 'CLOSED', closedAt: now });
+        reqDoc.status = 'CLOSED';
         continue;
       }
 
-      // Calculate distance
-      const reqLng = reqDoc.location.coordinates[0];
-      const reqLat = reqDoc.location.coordinates[1];
+      const reqLng = reqDoc.user?.location?.coordinates?.[0] || reqDoc.location?.coordinates?.[0] || 86.1438;
+      const reqLat = reqDoc.user?.location?.coordinates?.[1] || reqDoc.location?.coordinates?.[1] || 22.7780;
       const distanceKm = calculateHaversineDistance(userLat, userLng, reqLat, reqLng);
 
       if (distanceKm <= radiusKm) {
-        // Fetch group details to get current participant count & status
-        const group = await Group.findOne({ request: reqDoc._id }).populate('participants.user', 'name');
+        const group = await Group.findOne({ request: reqDoc._id }).populate('participants.user', 'name customId');
+
+        // Check if viewing user is already a member or has a pending join request
+        const isMember = group?.participants?.some(
+          (p) => (p.user?._id || p.user)?.toString() === req.user._id.toString()
+        );
+        const userJoinReq = await JoinRequest.findOne({
+          request: reqDoc._id,
+          applicant: req.user._id
+        }).sort({ createdAt: -1 });
 
         formattedRequests.push({
           ...reqDoc,
           distanceKm,
           participantCount: group ? group.participants.length : 1,
           maxParticipants: 4,
-          groupId: group ? group._id : null
+          groupId: group ? group._id : null,
+          isUserMember: Boolean(isMember),
+          userJoinRequestStatus: userJoinReq ? userJoinReq.status : null
         });
       }
     }
 
-    // Sort closest first
     formattedRequests.sort((a, b) => a.distanceKm - b.distanceKm);
-
     res.json(formattedRequests);
   } catch (error) {
     console.error('Error fetching nearby requests:', error);
@@ -158,30 +171,138 @@ router.get('/nearby', protect, async (req, res) => {
 });
 
 // @route   GET /api/requests/my-requests
-// @desc    Get user's own created requests (including historical)
+// @desc    Get user's own created and joined requests (including history / archived posts)
 router.get('/my-requests', protect, async (req, res) => {
   try {
     const requests = await Request.find({ user: req.user._id })
+      .populate('user', 'name customId averageRating')
       .sort({ createdAt: -1 })
       .lean();
 
     const result = [];
     for (const reqDoc of requests) {
-      const group = await Group.findOne({ request: reqDoc._id });
+      const group = await Group.findOne({ request: reqDoc._id }).populate('participants.user', 'name customId');
       result.push({
         ...reqDoc,
-        groupId: group ? group._id : null
+        groupId: group ? group._id : null,
+        participantCount: group ? group.participants.length : 1,
+        participants: group ? group.participants : []
       });
     }
 
-    res.json(result);
+    // Also fetch groups where user is a participant but not the owner
+    const joinedGroups = await Group.find({
+      'participants.user': req.user._id,
+      owner: { $ne: req.user._id }
+    })
+      .populate('request')
+      .populate('owner', 'name customId averageRating localityName')
+      .lean();
+
+    res.json({
+      myPosts: result,
+      joinedPosts: joinedGroups
+    });
   } catch (error) {
+    console.error('Error fetching my-requests:', error);
     res.status(500).json({ message: 'Server error fetching user requests' });
   }
 });
 
+// @route   PUT /api/requests/:id
+// @desc    Edit full request post details (Items, Date, Total MRP, Standalone Fee, Combined Total, Locality Name, Lat/Lng)
+router.put('/:id', protect, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const { totalMrp, standaloneTotal, combinedOrderTotal, localityName, deadline, items, lat, lng } = req.body;
+
+    const orderRequest = await Request.findById(requestId);
+    if (!orderRequest) {
+      return res.status(404).json({ message: 'Order request not found' });
+    }
+
+    if (orderRequest.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to edit this order request' });
+    }
+
+    if (totalMrp !== undefined) orderRequest.totalMrp = parseFloat(totalMrp);
+    if (standaloneTotal !== undefined) orderRequest.standaloneTotal = parseFloat(standaloneTotal);
+    if (combinedOrderTotal !== undefined) orderRequest.combinedOrderTotal = parseFloat(combinedOrderTotal);
+    if (localityName) orderRequest.localityName = localityName;
+    if (deadline) orderRequest.deadline = new Date(deadline);
+    if (Array.isArray(items)) orderRequest.items = items;
+    if (lat !== undefined && lng !== undefined) {
+      orderRequest.location = {
+        type: 'Point',
+        coordinates: [parseFloat(lng), parseFloat(lat)]
+      };
+    }
+
+    await orderRequest.save();
+
+    // Also update associated group
+    const group = await Group.findOne({ request: requestId });
+    if (group) {
+      if (combinedOrderTotal !== undefined) group.combinedOrderTotal = parseFloat(combinedOrderTotal);
+      // Update poster participant MRP and items
+      const posterPart = group.participants.find((p) => p.user.toString() === req.user._id.toString());
+      if (posterPart) {
+        if (totalMrp !== undefined) {
+          posterPart.totalMrp = parseFloat(totalMrp);
+          posterPart.itemMRP = parseFloat(totalMrp);
+        }
+        if (standaloneTotal !== undefined) {
+          posterPart.standaloneTotal = parseFloat(standaloneTotal);
+          posterPart.standaloneTotalAlone = parseFloat(standaloneTotal);
+        }
+        if (Array.isArray(items)) posterPart.items = items;
+      }
+      // Recalculate split
+      group.participants = calculateGroupSplit(group.participants, group.combinedOrderTotal);
+      await group.save();
+    }
+
+    res.json({ message: 'Order request updated successfully', orderRequest, group });
+  } catch (error) {
+    console.error('Edit request error:', error);
+    res.status(500).json({ message: 'Server error editing order request' });
+  }
+});
+
+// @route   DELETE /api/requests/:id
+// @desc    Immediately delete an order request from active feed & archive to history
+router.delete('/:id', protect, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const orderRequest = await Request.findById(requestId);
+
+    if (!orderRequest) {
+      return res.status(404).json({ message: 'Order request not found' });
+    }
+
+    if (orderRequest.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to delete this order request' });
+    }
+
+    // Mark as deleted from active feeds while preserving in user history
+    orderRequest.isDeletedFromFeed = true;
+    if (orderRequest.status === 'OPEN' || orderRequest.status === 'FULL') {
+      orderRequest.status = 'CLOSED';
+      orderRequest.closedAt = new Date();
+    }
+    await orderRequest.save();
+
+    await Group.updateMany({ request: requestId }, { isDeletedFromFeed: true, status: 'CLOSED' });
+
+    res.json({ message: 'Order request removed from active feed and saved to your history' });
+  } catch (error) {
+    console.error('Delete request error:', error);
+    res.status(500).json({ message: 'Server error deleting order request' });
+  }
+});
+
 // @route   POST /api/requests/:id/join-request
-// @desc    Send a join/chat request to postee (does NOT immediately add participant)
+// @desc    Send a join/chat request to postee
 router.post('/:id/join-request', protect, async (req, res) => {
   try {
     const requestId = req.params.id;
@@ -204,7 +325,6 @@ router.post('/:id/join-request', protect, async (req, res) => {
       return res.status(400).json({ message: `Order post is currently ${orderRequest.status}` });
     }
 
-    // Check if user already sent a pending join request
     const existing = await JoinRequest.findOne({
       request: requestId,
       applicant: req.user._id,
@@ -232,12 +352,12 @@ router.post('/:id/join-request', protect, async (req, res) => {
 });
 
 // @route   GET /api/requests/:id/join-requests
-// @desc    Get pending join requests for a request post (postee view)
+// @desc    Get pending join requests for a postee
 router.get('/:id/join-requests', protect, async (req, res) => {
   try {
     const requestId = req.params.id;
     const joinRequests = await JoinRequest.find({ request: requestId })
-      .populate('applicant', 'name email localityName location')
+      .populate('applicant', 'name email customId completedOrdersCount localityName location averageRating')
       .sort({ createdAt: -1 });
 
     res.json(joinRequests);
@@ -247,11 +367,11 @@ router.get('/:id/join-requests', protect, async (req, res) => {
 });
 
 // @route   PATCH /api/requests/:id/respond-request
-// @desc    Accept or reject a join request (Postee action)
+// @desc    Accept or reject a join request
 router.patch('/:id/respond-request', protect, async (req, res) => {
   try {
     const requestId = req.params.id;
-    const { joinRequestId, action } = req.body; // action: 'ACCEPT' or 'REJECT'
+    const { joinRequestId, action } = req.body;
 
     if (!joinRequestId || !['ACCEPT', 'REJECT'].includes(action)) {
       return res.status(400).json({ message: 'joinRequestId and valid action (ACCEPT/REJECT) are required' });
@@ -277,18 +397,15 @@ router.patch('/:id/respond-request', protect, async (req, res) => {
       return res.json({ message: 'Join request rejected', joinRequest: joinReq });
     }
 
-    // ACCEPT flow
     const group = await Group.findOne({ request: requestId });
     if (!group) {
       return res.status(404).json({ message: 'Group not found for this request' });
     }
 
-    // Check 4 participant cap
     if (group.participants.length >= 4) {
       return res.status(400).json({ message: 'Group is already full! Maximum 4 participants allowed.' });
     }
 
-    // Check if applicant is already in participants
     const alreadyMember = group.participants.some(
       (p) => p.user.toString() === joinReq.applicant._id.toString()
     );
@@ -296,24 +413,34 @@ router.patch('/:id/respond-request', protect, async (req, res) => {
     if (!alreadyMember) {
       group.participants.push({
         user: joinReq.applicant._id,
+        userName: joinReq.applicant.name,
         totalMrp: joinReq.totalMrp,
+        itemMRP: joinReq.totalMrp,
         standaloneTotal: joinReq.standaloneTotal,
+        standaloneTotalAlone: joinReq.standaloneTotal,
         items: joinReq.items || [],
-        settled: false
+        settled: false,
+        paymentStatus: 'PENDING'
       });
     }
 
-    // Recalculate proportional fee split
-    const updatedParticipants = calculateProportionalSplit(group.participants, group.combinedOrderTotal);
+    // Recalculate Combined Checkout Total Expected based on sum of members' added items + sharedHandlingFee
+    const totalMRP = group.participants.reduce((sum, p) => sum + (p.itemMRP !== undefined ? p.itemMRP : p.totalMrp), 0);
+    group.combinedOrderTotal = totalMRP + (group.sharedHandlingFee || 35);
+    orderRequest.combinedOrderTotal = group.combinedOrderTotal;
+    await orderRequest.save();
+
+    const updatedParticipants = calculateGroupSplit(group.participants, group.combinedOrderTotal);
     group.participants = updatedParticipants;
 
-    // Recalculate suggested geographic midpoint
     const allCoords = [];
     const posterUser = await Request.findById(requestId).populate('user');
-    if (posterUser && posterUser.user) {
+    if (posterUser && posterUser.user && posterUser.user.location?.coordinates) {
       allCoords.push(posterUser.user.location.coordinates);
     }
-    joinReq.applicant.location && allCoords.push(joinReq.applicant.location.coordinates);
+    if (joinReq.applicant.location?.coordinates) {
+      allCoords.push(joinReq.applicant.location.coordinates);
+    }
 
     if (allCoords.length > 0) {
       const midpoint = calculateGeographicMidpoint(allCoords);
@@ -323,7 +450,6 @@ router.patch('/:id/respond-request', protect, async (req, res) => {
       };
     }
 
-    // If max 4 participants reached, mark FULL
     if (group.participants.length >= 4) {
       group.status = 'MATCHED';
       orderRequest.status = 'FULL';
@@ -344,14 +470,14 @@ router.patch('/:id/respond-request', protect, async (req, res) => {
 });
 
 // @route   PATCH /api/requests/:id/status
-// @desc    Update request status (CLOSED / COMPLETED) by poster, setting closedAt for 1-hour window
+// @desc    Update request status (CLOSED / COMPLETED) regardless of member count & increment completed orders stats
 router.patch('/:id/status', protect, async (req, res) => {
   try {
     const requestId = req.params.id;
-    const { status } = req.body; // 'CLOSED' or 'COMPLETED'
+    const { status } = req.body;
 
-    if (!['CLOSED', 'COMPLETED'].includes(status)) {
-      return res.status(400).json({ message: 'Invalid status. Allowed values: CLOSED, COMPLETED' });
+    if (!['CLOSED', 'COMPLETED', 'OPEN'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Allowed values: CLOSED, COMPLETED, OPEN' });
     }
 
     const orderRequest = await Request.findById(requestId);
@@ -364,17 +490,31 @@ router.patch('/:id/status', protect, async (req, res) => {
     }
 
     orderRequest.status = status;
-    orderRequest.closedAt = new Date();
+    if (status === 'COMPLETED') {
+      orderRequest.completedAt = new Date();
+    } else if (status === 'CLOSED') {
+      orderRequest.closedAt = new Date();
+    }
     await orderRequest.save();
 
     const group = await Group.findOne({ request: requestId });
     if (group) {
-      group.status = status === 'COMPLETED' ? 'COMPLETED' : 'CLOSED';
+      group.status = status === 'COMPLETED' ? 'COMPLETED' : status === 'CLOSED' ? 'CLOSED' : 'PENDING';
       await group.save();
+
+      // If COMPLETED, increment completedOrdersCount for all participants
+      if (status === 'COMPLETED') {
+        const participantUserIds = group.participants.map((p) => p.user);
+        await User.updateMany(
+          { _id: { $in: participantUserIds } },
+          { $inc: { completedOrdersCount: 1 } }
+        );
+      }
     }
 
     res.json({ message: `Order status updated to ${status}`, orderRequest, group });
   } catch (error) {
+    console.error('Status update error:', error);
     res.status(500).json({ message: 'Server error updating request status' });
   }
 });

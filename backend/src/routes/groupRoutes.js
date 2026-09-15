@@ -3,7 +3,7 @@ import Group from '../models/Group.js';
 import Request from '../models/Request.js';
 import JoinRequest from '../models/JoinRequest.js';
 import { protect } from '../middleware/auth.js';
-import { calculateProportionalSplit, calculateGeographicMidpoint } from '../utils/geo.js';
+import { calculateGroupSplit, calculateGeographicMidpoint } from '../utils/geo.js';
 
 const router = express.Router();
 
@@ -12,15 +12,14 @@ const router = express.Router();
 router.get('/:id', protect, async (req, res) => {
   try {
     let group = await Group.findById(req.params.id)
-      .populate('owner', 'name email localityName location')
-      .populate('participants.user', 'name email localityName location')
+      .populate('owner', 'name email customId completedOrdersCount localityName location averageRating ratings')
+      .populate('participants.user', 'name email customId completedOrdersCount localityName location averageRating ratings')
       .populate('request');
 
     if (!group) {
-      // Try searching by request ID
       group = await Group.findOne({ request: req.params.id })
-        .populate('owner', 'name email localityName location')
-        .populate('participants.user', 'name email localityName location')
+        .populate('owner', 'name email customId completedOrdersCount localityName location averageRating ratings')
+        .populate('participants.user', 'name email customId completedOrdersCount localityName location averageRating ratings')
         .populate('request');
     }
 
@@ -28,21 +27,22 @@ router.get('/:id', protect, async (req, res) => {
       return res.status(404).json({ message: 'Group not found' });
     }
 
-    // Compute live split calculations
-    const updatedParticipants = calculateProportionalSplit(group.participants, group.combinedOrderTotal);
+    const updatedParticipants = calculateGroupSplit(group.participants, group.combinedOrderTotal);
 
-    // Compute suggested midpoint from current participant locations
     const coordsList = group.participants
       .filter((p) => p.user && p.user.location && p.user.location.coordinates)
       .map((p) => p.user.location.coordinates);
 
     const midpointCoords = calculateGeographicMidpoint(coordsList);
 
-    // Check if user has a pending or accepted join request
     const userJoinReq = await JoinRequest.findOne({
       request: group.request._id,
       applicant: req.user._id
     }).sort({ createdAt: -1 });
+
+    const isMember = group.participants.some(
+      (p) => (p.user?._id || p.user)?.toString() === req.user._id.toString()
+    );
 
     res.json({
       _id: group._id,
@@ -58,7 +58,8 @@ router.get('/:id', protect, async (req, res) => {
         coordinates: midpointCoords
       },
       meetingTime: group.meetingTime,
-      userJoinRequest: userJoinReq
+      userJoinRequest: userJoinReq,
+      isUserMember: Boolean(isMember)
     });
   } catch (error) {
     console.error('Error fetching group:', error);
@@ -83,7 +84,7 @@ router.post('/:id/finalize-cost', protect, async (req, res) => {
       group.sharedHandlingFee = parseFloat(sharedHandlingFee);
     }
 
-    const updatedParticipants = calculateProportionalSplit(group.participants, group.combinedOrderTotal);
+    const updatedParticipants = calculateGroupSplit(group.participants, group.combinedOrderTotal);
     group.participants = updatedParticipants;
     await group.save();
 
@@ -113,6 +114,7 @@ router.patch('/:id/toggle-settled', protect, async (req, res) => {
     }
 
     participant.settled = !participant.settled;
+    participant.paymentStatus = participant.settled ? 'PAID' : 'PENDING';
     await group.save();
 
     res.json({ message: 'Settled state toggled', participant, group });

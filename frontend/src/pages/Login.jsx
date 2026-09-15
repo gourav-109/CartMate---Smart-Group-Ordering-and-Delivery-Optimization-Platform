@@ -21,7 +21,7 @@ export const Login = () => {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      setError(err.response?.data?.message || 'Cannot connect to backend server. Make sure the backend is running on http://localhost:5000');
     } finally {
       setLoading(false);
     }
@@ -34,20 +34,20 @@ export const Login = () => {
       await login(presetEmail, 'password123');
       navigate('/');
     } catch (err) {
-      setError('Preset user login failed. Please ensure seed script has been run (`npm run seed`).');
+      setError(err.response?.data?.message || 'Login failed. Please ensure backend server is started on http://localhost:5000');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ maxWidth: '440px', margin: '3rem auto 0 auto', width: '100%' }}>
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '2rem' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '800', textAlign: 'center', marginBottom: '0.5rem', color: 'var(--blinkit-yellow)' }}>
-          🛒 Login to CartMate
+    <div style={{ maxWidth: '460px', margin: '3rem auto 0 auto', width: '100%' }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '18px', padding: '2rem' }}>
+        <h2 style={{ fontSize: '1.55rem', fontWeight: '800', textAlign: 'center', marginBottom: '0.4rem', color: 'var(--blinkit-yellow)' }}>
+          🛒 Login to Cartmate
         </h2>
         <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-          Combine Blinkit quick-commerce orders & split handling fees with neighbors!
+          Combine Blinkit quick-commerce orders & split handling fees with NIT Jamshedpur neighbors!
         </p>
 
         {error && (
@@ -79,28 +79,28 @@ export const Login = () => {
             />
           </div>
 
-          <button type="submit" disabled={loading} className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: '1rem', padding: '0.75rem' }}>
+          <button type="submit" disabled={loading} className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: '1rem', padding: '0.8rem', fontSize: '0.95rem' }}>
             <LogIn size={18} /> {loading ? 'Logging in...' : 'Sign In'}
           </button>
         </form>
 
-        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.6rem', textAlign: 'center', fontWeight: '600' }}>
-            ⚡ Hackathon Demo 1-Click Preset Logins:
+        <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textAlign: 'center', fontWeight: '700' }}>
+            ⚡ 1-Click NIT Jamshedpur Demo Logins:
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-            <button type="button" onClick={() => handleQuickLogin('aarav@example.com')} className="btn-secondary" style={{ fontSize: '0.78rem', padding: '0.4rem 0.6rem' }}>
-              👤 Aarav (Koramangala 4th)
+            <button type="button" onClick={() => handleQuickLogin('aarav@example.com')} className="btn-secondary" style={{ fontSize: '0.76rem', padding: '0.45rem 0.5rem', justifyContent: 'center' }}>
+              👤 Aarav (Hostel 1)
             </button>
-            <button type="button" onClick={() => handleQuickLogin('priya@example.com')} className="btn-secondary" style={{ fontSize: '0.78rem', padding: '0.4rem 0.6rem' }}>
-              👤 Priya (Koramangala 5th)
+            <button type="button" onClick={() => handleQuickLogin('priya@example.com')} className="btn-secondary" style={{ fontSize: '0.76rem', padding: '0.45rem 0.5rem', justifyContent: 'center' }}>
+              👤 Priya (Hostel 4)
             </button>
-            <button type="button" onClick={() => handleQuickLogin('rohan@example.com')} className="btn-secondary" style={{ fontSize: '0.78rem', padding: '0.4rem 0.6rem' }}>
-              👤 Rohan (Koramangala 6th)
+            <button type="button" onClick={() => handleQuickLogin('rohan@example.com')} className="btn-secondary" style={{ fontSize: '0.76rem', padding: '0.45rem 0.5rem', justifyContent: 'center' }}>
+              👤 Rohan (Outer Circle)
             </button>
-            <button type="button" onClick={() => handleQuickLogin('ananya@example.com')} className="btn-secondary" style={{ fontSize: '0.78rem', padding: '0.4rem 0.6rem' }}>
-              👤 Ananya (HSR Layout)
+            <button type="button" onClick={() => handleQuickLogin('ananya@example.com')} className="btn-secondary" style={{ fontSize: '0.76rem', padding: '0.45rem 0.5rem', justifyContent: 'center' }}>
+              👤 Ananya (Adityapur)
             </button>
           </div>
         </div>
