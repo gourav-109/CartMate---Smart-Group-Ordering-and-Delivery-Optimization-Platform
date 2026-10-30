@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import API from '../services/api';
 import { MapPicker } from '../components/MapPicker';
+import { toDatetimeLocalValue } from '../utils/datetimeLocal';
 import { ShoppingBag, Plus, Trash2, Clock, MapPin, AlertCircle, ArrowLeft } from 'lucide-react';
 
 export const NewRequest = () => {
@@ -17,8 +18,8 @@ export const NewRequest = () => {
   const [lat, setLat] = useState(user?.location?.coordinates?.[1] || 22.7780);
   const [lng, setLng] = useState(user?.location?.coordinates?.[0] || 86.1438);
 
-  // Set default deadline to 5 hours from now
-  const defaultDeadline = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 16);
+  // Set default deadline to 5 hours from now (local wall time for datetime-local)
+  const defaultDeadline = toDatetimeLocalValue(new Date(Date.now() + 5 * 60 * 60 * 1000));
   const [deadline, setDeadline] = useState(defaultDeadline);
 
   // Item list

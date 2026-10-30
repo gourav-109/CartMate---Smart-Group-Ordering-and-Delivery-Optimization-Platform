@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import API from '../services/api';
 import { MapPicker } from '../components/MapPicker';
+import { toDatetimeLocalValue } from '../utils/datetimeLocal';
 import { ShoppingBag, Plus, Trash2, Save, ArrowLeft, AlertCircle } from 'lucide-react';
 
 export const EditRequest = () => {
@@ -38,7 +39,7 @@ export const EditRequest = () => {
         setCombinedOrderTotal(reqDoc.combinedOrderTotal);
         setLocalityName(reqDoc.localityName);
         if (reqDoc.deadline) {
-          setDeadline(new Date(reqDoc.deadline).toISOString().slice(0, 16));
+          setDeadline(toDatetimeLocalValue(reqDoc.deadline));
         }
         setItems(reqDoc.items || []);
         if (reqDoc.location?.coordinates) {
